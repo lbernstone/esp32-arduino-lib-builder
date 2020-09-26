@@ -38,12 +38,12 @@ fi
 mkdir -p dist
 
 # update components from git
-./tools/update-components.sh
-if [ $? -ne 0 ]; then exit 1; fi
+#./tools/update-components.sh
+#if [ $? -ne 0 ]; then exit 1; fi
 
 # install esp-idf and gcc toolchain
-source ./tools/install-esp-idf.sh
-if [ $? -ne 0 ]; then exit 1; fi
+#source ./tools/install-esp-idf.sh
+#if [ $? -ne 0 ]; then exit 1; fi
 
 # build and prepare libs
 ./tools/build-libs.sh

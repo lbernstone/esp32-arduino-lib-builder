@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source tools/config.sh
+
 #remove previous build
 rm -rf ./out ./build
 
