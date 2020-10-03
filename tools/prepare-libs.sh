@@ -1,12 +1,7 @@
 #!/bin/bash
+
 # config
 source ./tools/config.sh
-
-# clean previous
-if [ -e "$AR_TOOLS" ]; then
-	rm -rf "$AR_TOOLS"
-fi
-mkdir -p "$AR_SDK"
 
 # start generation of platformio-build.py
 awk "/CPPPATH\=\[/{n++}{print>n\"pio_start.txt\"}" $AR_COMPS/arduino/tools/platformio-build.py
@@ -16,6 +11,8 @@ cat pio_start.txt > "$AR_PLATFORMIO_PY"
 rm pio_end.txt 1pio_start.txt 2pio_start.txt pio_start.txt
 
 # include dirs
+mkdir -p $AR_SDK/include
+rsync -amv $IDF_PATH/components/ $AR_SDK/include/ --include '*/' --include '*.h' --exclude '*'
 AR_INC="-DESP_PLATFORM -DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" -DHAVE_CONFIG_H -DGCC_NOT_5_2_0=0 -DWITH_POSIX \"-I{compiler.sdk.path}/include/config\""
 echo "    CPPPATH=[" >> "$AR_PLATFORMIO_PY" && echo "       join(FRAMEWORK_DIR, \"tools\", \"sdk\", \"include\", \"config\")," >> "$AR_PLATFORMIO_PY"
 while [ "$1" != "" ]; do
@@ -84,8 +81,8 @@ for lib in `find build -name '*.a' | grep -v bootloader | grep -v libmain | grep
         echo "skipping $lib: size too small $lsize"
     fi
 done
-cp build/bootloader_support/libbootloader_support.a $AR_SDK/lib/
-cp build/micro-ecc/libmicro-ecc.a $AR_SDK/lib/
+cp build/bootloader/esp-idf/bootloader_support/libbootloader_support.a $AR_SDK/lib/
+cp build/bootloader/esp-idf/micro-ecc/libmicro-ecc.a $AR_SDK/lib/
 
 # remove liblib.a from esp-face (empty and causing issues on Windows)
 rm -rf $AR_SDK/lib/liblib.a
@@ -130,7 +127,7 @@ cat 1platform_mid.txt >> "$AR_PLATFORM_TXT"
 rm platform_start.txt platform_mid.txt 1platform_mid.txt
 
 # sdkconfig
-mkdir -p $AR_SDK/include/config && cp -f build/include/sdkconfig.h $AR_SDK/include/config/sdkconfig.h
+mkdir -p $AR_SDK/include/config && cp -f build/config/sdkconfig.h $AR_SDK/include/config/sdkconfig.h
 cp -f sdkconfig $AR_SDK/sdkconfig
 
 # esptool.py
@@ -143,7 +140,7 @@ cp $IDF_COMPS/partition_table/gen_esp32part.py $AR_GEN_PART_PY
 mkdir -p $AR_SDK/ld && find $IDF_COMPS/esp32/ld -name '*.ld' -exec cp -f {} $AR_SDK/ld/ \;
 
 # ld script
-cp -f build/esp32/*.ld $AR_SDK/ld/
+cp -f build/esp-idf/esp32/*.ld $AR_SDK/ld/
 
 # Add IDF versions to sdkconfig
 echo "#define CONFIG_ARDUINO_IDF_COMMIT \"$IDF_COMMIT\"" >> $AR_SDK/include/config/sdkconfig.h
