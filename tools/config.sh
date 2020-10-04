@@ -1,16 +1,15 @@
 #!/bin/bash
 
-IDF_COMPS="$IDF_PATH/components"
-IDF_TOOLCHAIN="xtensa-esp32-elf"
-IDF_TOOLCHAIN_LINUX_ARMEL="https://dl.espressif.com/dl/xtensa-esp32-elf-linux-armel-1.22.0-87-gb57bad3-5.2.0.tar.gz"
-IDF_TOOLCHAIN_LINUX32="https://dl.espressif.com/dl/xtensa-esp32-elf-linux32-1.22.0-80-g6c4433a-5.2.0.tar.gz"
-IDF_TOOLCHAIN_LINUX64="https://dl.espressif.com/dl/xtensa-esp32-elf-linux64-1.22.0-80-g6c4433a-5.2.0.tar.gz"
-IDF_TOOLCHAIN_WIN32="https://dl.espressif.com/dl/xtensa-esp32-elf-win32-1.22.0-80-g6c4433a-5.2.0.zip"
-IDF_TOOLCHAIN_MACOS="https://dl.espressif.com/dl/xtensa-esp32-elf-osx-1.22.0-80-g6c4433a-5.2.0.tar.gz"
+if [ -z $IDF_COMMIT ]; then IDF_COMMIT="release/v4.2"; fi
+if [ -z $CAMERA_COMMIT ]; then CAMERA_COMMIT="master"; fi
+if [ -z $FACE_COMMIT ]; then FACE_COMMIT="master"; fi
+if [ -z $ARDUINO_COMMIT ]; then ARDUINO_COMMIT="esp32s2"; fi
+FULL_CLONE=0
 
-if [ -z $IDF_BRANCH ]; then
-	IDF_BRANCH="release/v3.3"
+if [ -z $IDF_PATH ]; then 
+	export IDF_PATH="$PWD/esp-idf"
 fi
+IDF_COMPS="$IDF_PATH/components"
 
 # Owner of the target ESP32 Arduino repository
 AR_USER="espressif"
@@ -23,7 +22,7 @@ CAMERA_REPO_URL="https://github.com/espressif/esp32-camera.git"
 FACE_REPO_URL="https://github.com/espressif/esp-face.git"
 AR_REPO_URL="https://github.com/$AR_REPO.git"
 
-if [ -n $GITHUB_TOKEN ]; then
+if [ "$GITHUB_TOKEN" != "" ]; then
 	AR_REPO_URL="https://$GITHUB_TOKEN@github.com/$AR_REPO.git"
 fi
 
@@ -105,3 +104,58 @@ function git_create_pr(){ # git_create_pr <branch> <title>
 	if [ ! "$done_pr" == "" ] && [ ! "$done_pr" == "null" ]; then echo 1; else echo 0; fi
 }
 
+function cloner() {
+    local URL="$1"
+    if [ "$3" == "" ]; then
+        local DPATH="$2"
+        local COMMIT=master
+    else
+        local DPATH="$3"
+        local COMMIT=$2
+    fi
+
+    if [ "$FULL_CLONE" == "1" ]; then
+	git clone $URL -b $COMMIT $DPATH
+	git -C $DPATH submodule update --progress --init --recursive
+    else
+        mkdir -p $DPATH
+        git -C $DPATH init
+        git -C $DPATH remote add origin $URL
+        git -C $DPATH fetch --progress --depth 1 origin $COMMIT
+        git -C $DPATH checkout FETCH_HEAD
+	git -C $DPATH submodule update --depth 1 --progress --init --recursive
+    fi
+}
+
+function updater() {
+    if [ "$NO_UPDATES" == "1" ]; then return; fi
+    local URL="$1"
+    if [ "$3" == "" ]; then
+        local DPATH="$2"
+        local COMMIT=master
+    else
+        local DPATH="$3"
+        local COMMIT=$2
+    fi
+
+    if [ "$FULL_CLONE" != "1" ]; then
+            grep $COMMIT $DPATH/.git/FETCH_HEAD && return
+	    local DEPTH="--depth 1"
+    fi
+    git -C "$DPATH" fetch $DEPTH origin && \
+    git -C "$DPATH" checkout $COMMIT
+    git -C "$DPATH" submodule update $DEPTH --init --recursive
+}
+
+function builder() {
+	PRODUCT=$1
+	if [ -f $AR_ROOT/sdkconfig.$PRODUCT ]; then
+        	cp $AR_ROOT/sdkconfig.$PRODUCT $AR_ROOT/sdkconfig
+	else
+        	cp $AR_COMPS/tools/sdk/$PRODUCT/sdkconfig $AR_ROOT/sdkconfig
+	fi
+	$IDF_PATH/tools/idf.py fullclean
+	$IDF_PATH/tools/idf.py set-target $PRODUCT
+	$IDF_PATH/tools/idf.py build
+	if [ $? -ne 0 ]; then exit 1; fi
+}
